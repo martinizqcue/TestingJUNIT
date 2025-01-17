@@ -1,0 +1,112 @@
+import org.junit.jupiter.api.*;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class SQLiteTest {
+
+    SQLite sqlite;
+
+    @BeforeEach
+    void setUp() {
+        sqlite = new SQLite();
+        sqlite.crearTablas(); // Asegúrate de que las tablas estén creadas antes de cada test
+    }
+
+    @Test
+    void conectar() {
+        Connection connection = SQLite.conectar();
+        assertNotNull(connection, "La conexión a la base de datos debería ser exitosa.");
+        SQLite.cerrar(connection);
+    }
+
+    @Test
+    void cerrar() {
+        Connection connection = SQLite.conectar();
+        assertDoesNotThrow(() -> SQLite.cerrar(connection), "Cerrar la conexión no debería lanzar excepciones.");
+    }
+
+    @Test
+    void crearTablas() {
+        // No esperamos errores al crear tablas si ya existen
+        assertDoesNotThrow(() -> sqlite.crearTablas(), "La creación de tablas no debería lanzar excepciones.");
+    }
+
+    @Test
+    void crearUsuario() {
+        sqlite.crearUsuario("12345678Z", 1000.0);
+        try (Connection conn = SQLite.conectar();
+             ResultSet rs = conn.createStatement().executeQuery("SELECT * FROM usuarios WHERE dni = '12345678Z'")) {
+            assertTrue(rs.next(), "El usuario debería haberse registrado en la base de datos.");
+            assertEquals(1000.0, rs.getDouble("saldo"), "El saldo inicial debería ser 1000.0.");
+        } catch (SQLException e) {
+            fail("Error al consultar el usuario: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void ingresar() {
+        SQLite sqlite = new SQLite();
+        String dni = "12345678Z"; // DNI único para la prueba
+        String conceptoEsperado = "Salario";
+        double cantidad = 2000.0;
+
+        // Asegurarse de que el usuario existe
+        sqlite.crearUsuario(dni, 1000.0);
+
+        // Registrar un ingreso
+        sqlite.ingresar(dni, conceptoEsperado, cantidad);
+
+        // Verificar que el ingreso se ha registrado correctamente
+        String conceptoReal = null;
+        try (Connection conn = SQLite.conectar();
+             PreparedStatement stmt = conn.prepareStatement("SELECT concepto FROM ingresos WHERE dni = ? ORDER BY id DESC LIMIT 1")) {
+            stmt.setString(1, dni);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                conceptoReal = rs.getString("concepto");
+            }
+        } catch (SQLException e) {
+            fail("Error al consultar la base de datos: " + e.getMessage());
+        }
+
+        // Comparar valores esperados y reales
+        assertEquals(conceptoEsperado, conceptoReal, "El concepto debería ser 'Salario'.");
+    }
+
+
+    @Test
+    void gastar() {
+        SQLite sqlite = new SQLite();
+        String dni = "12345678Z"; // DNI válido para la prueba
+        String conceptoEsperado = "Renta";
+        double cantidad = 150.0;
+
+        // Asegurarse de que el usuario existe
+        sqlite.crearUsuario(dni, 1000.0);
+
+        // Registrar un gasto
+        sqlite.gastar(dni, conceptoEsperado, cantidad);
+
+        // Verificar que el gasto se ha registrado correctamente
+        String conceptoReal = null;
+        try (Connection conn = SQLite.conectar();
+             PreparedStatement stmt = conn.prepareStatement("SELECT concepto FROM gastos WHERE dni = ? ORDER BY id DESC LIMIT 1")) {
+            stmt.setString(1, dni);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                conceptoReal = rs.getString("concepto");
+            }
+        } catch (SQLException e) {
+            fail("Error al consultar la base de datos: " + e.getMessage());
+        }
+
+        // Comparar valores esperados y reales
+        assertEquals(conceptoEsperado, conceptoReal, "El concepto debería ser 'Renta'.");
+    }
+
+}
